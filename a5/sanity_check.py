@@ -12,6 +12,8 @@ Usage:
     sanity_check.py 2b
     sanity_check.py 2c
     sanity_check.py 2d
+    sanity_check.py 1h
+    sanity_check.py 1i
 """
 import json
 import math
@@ -34,6 +36,9 @@ from nmt_model import NMT
 import torch
 import torch.nn as nn
 import torch.nn.utils
+
+import highway
+import cnn
 
 #----------
 # CONSTANTS
@@ -75,6 +80,7 @@ def question_1e_sanity_check():
 
     print("All Sanity Checks Passed for Question 1e: words2charindices()!")
     print ("-"*80)
+    # print(vocab.to_input_tensor_char(tgt_sents, torch.device('cpu')).shape)
 
 def question_1f_sanity_check():
     """ Sanity check for pad_sents_char() function. 
@@ -94,7 +100,6 @@ def question_1f_sanity_check():
 
     print("Sanity Check Passed for Question 1f: Padding!")
     print("-"*80)
-
 
 def question_1j_sanity_check(model):
 	""" Sanity check for model_embeddings.py 
@@ -177,6 +182,95 @@ def question_2d_sanity_check(decoder):
     print("Sanity Check Passed for Question 2d: CharDecoder.decode_greedy()!")
     print("-"*80)
 
+def question_1h_sanity_check():
+    """ Sanity check for highway.py
+        designed by Kortez
+    """
+    test_model0 = highway.Highway(e_word=256)
+    x_test0 = torch.zeros(BATCH_SIZE, 256)
+    assert(test_model0.forward(x_test0).shape == x_test0.shape), \
+    "Shape of forward() should be {} but is: {}".format(x_test0.shape, test_model.forward(x_test0).shape)
+    print ("-"*80)
+    print("Shape of forward() passed Sanity Check!")
+    print ("-"*80)
+    x_test1 = torch.tensor([[[-1,3,2,0],[100,10,1,0.1]],[[1,1,1,1],[0,0,0,0]]])
+    test_model1 = highway.Highway(e_word=4)
+    test_model1.load_state_dict({'conv_out_to_proj_hidden.weight':torch.tensor([[1,-1,0,1],[1,-1,0,1],[1,-1,1,0],[1,-1,1,0]]), \
+    'conv_out_to_proj_hidden.bias':torch.tensor([1,1,1,1]), \
+    'conv_out_to_gate_hidden.weight':torch.tensor([[0,0,0,0],[0,0,0,0],[0,0,0,0],[0,0,0,0]]), \
+    'conv_out_to_gate_hidden.bias':torch.tensor([0,0,0,0])})
+    gold_p1 = [[[-0.5, 1.5, 1, 0],[95.55, 50.55, 46.5, 46.05]],[[ 1.5, 1.5, 1.5, 1.5],[ 0.5, 0.5, 0.5, 0.5]]]
+    out_p1 = [[[round(x.item(), 2) for x in y] for y in z] for z in test_model1.forward(x_test1)]
+    assert(out_p1 == gold_p1), "Output of part1 should be {} but is: {}".format(gold_p1, out_p1)
+    print("Part 1 passed Sanity Check!")
+    print ("-"*80)
+    x_test2 = torch.rand((3,5,4)) - torch.full((3,5,4), 0.5)
+    test_model2 = highway.Highway(e_word=4)
+    w_p, b_p = test_model2.state_dict()['conv_out_to_proj_hidden.weight'], test_model2.state_dict()['conv_out_to_proj_hidden.bias']
+    w_g, b_g = test_model2.state_dict()['conv_out_to_gate_hidden.weight'], test_model2.state_dict()['conv_out_to_gate_hidden.bias']
+    b_w_p = torch.unsqueeze(torch.t(w_p), 0)
+    b_b_p = torch.unsqueeze(torch.unsqueeze(b_p, 0), 0)
+    b_w_g = torch.unsqueeze(torch.t(w_g), 0)
+    b_b_g = torch.unsqueeze(torch.unsqueeze(b_g, 0), 0)
+    b_w_p = torch.cat((b_w_p, b_w_p, b_w_p), 0)
+    b_b_p = torch.cat((b_b_p, b_b_p, b_b_p), 0)
+    b_w_g = torch.cat((b_w_g, b_w_g, b_w_g), 0)
+    b_b_g = torch.cat((b_b_g, b_b_g, b_b_g), 0)
+    x_p =  torch.nn.functional.relu(torch.bmm(x_test2, b_w_p) + b_b_p)
+    x_g =  torch.sigmoid(torch.bmm(x_test2, b_w_g) + b_b_g)
+    print("+"*10+"Should be:"+"+"*10)
+    print(torch.mul(x_g, x_p) + torch.mul(1 - x_g, x_test2))
+    print("+"*10+"Yours:"+"+"*10)
+    print(test_model2.forward(x_test2))
+    print("End of Part 2!")
+    print("Sanity Check Passed for Question 1h Highway!")
+    print("-"*80)
+
+def question_1i_sanity_check():
+    """ Sanity check for cnn.py
+        designed by Kortez
+    """
+    test_model = cnn.CNN()
+    x_test0 = torch.zeros(BATCH_SIZE, 50, 21)
+    assert(test_model.forward(x_test0).shape == torch.Size([5, 256])), \
+    "Shape of forward() should be {} but is: {}".format(torch.Size([5, 256]), test_model.forward(x_test0).shape)
+    print ("-"*80)
+    print("Shape of forward() passed Sanity Check!")
+    print ("-"*80)
+    test_model.load_state_dict({'conv.weight':torch.full((256,50,5), 1), \
+    'conv.bias':torch.full((256,), -10)})
+    x_test1 = torch.tensor([[21*[x] for x in range(50)], [21*[x % 2] for x in range(50)]]).float()
+    out_p1 = [[x.item() for x in y] for y in test_model.forward(x_test1)]
+    gold_p1 = [256*[6115.0], 256*[115.0]]
+    assert(out_p1 == gold_p1), "Output of part1 should be {} but is: {}".format(gold_p1, out_p1)
+    print("Part 1 passed Sanity Check!")
+    print ("-"*80)
+    test_model = cnn.CNN()
+    b_size = 2
+    x_test2 = (torch.rand((b_size,50,21))-torch.full((b_size,50,21),-1)).float()
+    out_p2= [[round(x.item(),2) for x in y] for y in test_model.forward(x_test2)]
+    w_c, b_c = test_model.state_dict()['conv.weight'], test_model.state_dict()['conv.bias']
+    x_2 = [[[x.item() for x in y] for y in z] for z in x_test2.permute(0,2,1)]
+    w = [[[x.item() for x in y] for y in z] for z in w_c.permute(0,2,1)]
+    b = [x.item() for x in b_c]
+    gold_p2 = [256*[1] for i in range(b_size)]
+    for batch in range(b_size):
+        for window in range(256):
+            conv_sum = []
+            for k in range(17):
+                conv_item = 0
+                for i in range(5):
+                    for j in range(50):
+                        conv_item += x_2[batch][k+i][j] * w[window][i][j]
+                conv_item += b[window]
+                conv_sum.append(conv_item)
+            gold_p2[batch][window] = round(max(max(conv_sum),0.0),2)
+    assert(out_p2 == gold_p2), "Output of part2 should be {} but is: {}".format(gold_p2, out_p2)
+    print("Part 2 passed Sanity Check!")
+    print ("-"*80)
+    print("Sanity Check Passed for Question 1i CNN!")
+    print ("-"*80)
+
 def main():
     """ Main func.
     """
@@ -223,6 +317,10 @@ def main():
         question_2c_sanity_check(decoder)
     elif args['2d']:
         question_2d_sanity_check(decoder)
+    elif args['1h']:
+        question_1h_sanity_check()
+    elif args['1i']:
+        question_1i_sanity_check()
     else:
         raise RuntimeError('invalid run mode')
 
