@@ -44,6 +44,7 @@ import math
 import sys
 import pickle
 import time
+import os
 
 
 from docopt import docopt
@@ -151,26 +152,7 @@ def train(args: Dict):
     hist_valid_scores = []
     train_time = begin_time = time.time()
     print('begin Maximum Likelihood training')
-
-    #load
-    
-    num_trial += 2
-    lr = optimizer.param_groups[0]['lr'] * float(args['--lr-decay'])
-    lr = optimizer.param_groups[0]['lr'] * float(args['--lr-decay'])
-    print('load last model and decay learning rate to %f' % lr, file=sys.stderr)
-    params = torch.load(model_save_path, map_location=lambda storage, loc: storage)
-    model.load_state_dict(params['state_dict'])
-    model = model.to(device)
-    print('restore parameters of the optimizers', file=sys.stderr)
-    optimizer.load_state_dict(torch.load(model_save_path + '.optim'))
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
-    print('begin validation ...', file=sys.stderr)
-    # compute dev. ppl and bleu
-    ev_ppl = evaluate_ppl(model, dev_data, batch_size=128)   # dev batch size can be a bit larger
-    valid_metric = -dev_ppl
-    print('validation: iter %d, dev. ppl %f' % (train_iter, dev_ppl), file=sys.stderr)
-    hist_valid_scores.append(valid_metric)
+    os.environ['CUDA_VISIBLE_DEVICES']='1' 
 
     while True:
         epoch += 1
